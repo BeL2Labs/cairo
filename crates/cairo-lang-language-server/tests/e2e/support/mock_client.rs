@@ -8,8 +8,8 @@ use futures::channel::mpsc;
 use futures::{join, stream, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use lsp_types::{lsp_notification, lsp_request};
 use serde_json::Value;
-use tokio::time::error::Elapsed;
 use tokio::time::timeout;
+use tower_lsp::jsonrpc::Request;
 use tower_lsp::{lsp_types, ClientSocket, LanguageServer, LspService};
 use tower_service::Service;
 
@@ -23,7 +23,7 @@ use crate::support::runtime::{AbortOnDrop, GuardedRuntime};
 ///
 /// The language server is terminated abruptly upon dropping of this struct.
 /// The `shutdown` request and `exit` notifications are not sent at all.
-/// Instead, the Tokio Runtime that is executing the server is being shut down and any running
+/// Instead, the Tokio Runtime executing the server is being shut down and any running
 /// blocking tasks are given a small period of time to complete.
 pub struct MockClient {
     fixture: Fixture,
@@ -35,10 +35,11 @@ pub struct MockClient {
 }
 
 impl MockClient {
-    /// Starts and initializes CairoLS in context of a given fixture and given client capabilities.
+    /// Starts and initializes CairoLS in the context of a given fixture and given client
+    /// capabilities.
     ///
-    /// Upon completion of this function the language server will be in the _initialized_ state
-    /// (i.e. the `initialize` request and `initialized` notification both will be completed).
+    /// Upon completion of this function, the language server will be in the _initialized_ state
+    /// (i.e., the `initialize` request and `initialized` notification both will be completed).
     #[must_use]
     pub fn start(fixture: Fixture, capabilities: lsp_types::ClientCapabilities) -> Self {
         let rt = GuardedRuntime::start();
@@ -161,7 +162,7 @@ impl MockClient {
             self.input_tx.send(message.clone()).await.expect("failed to send request");
 
             while let Some(response_message) =
-                self.output.recv().await.unwrap_or_else(|_| panic!("timeout: {message:?}"))
+                self.output.recv().await.unwrap_or_else(|err| panic!("{err:?}: {message:?}"))
             {
                 match response_message {
                     Message::Request(res) if res.id().is_none() => {
@@ -201,6 +202,36 @@ impl MockClient {
             self.input_tx.send(message).await.expect("failed to send notification");
         })
     }
+
+    /// Looks for a typed client notification that satisfies the given predicate in message trace
+    /// or waits for a new one.
+    pub fn wait_for_notification<N>(&mut self, predicate: impl Fn(&N::Params) -> bool)
+    where
+        N: lsp_types::notification::Notification,
+    {
+        self.wait_for_rpc_request(|req| {
+            if req.method() != N::METHOD {
+                return false;
+            }
+            let params = serde_json::from_value(req.params().cloned().unwrap_or_default())
+                .expect("failed to parse notification params");
+            predicate(&params)
+        })
+    }
+
+    /// Looks for a client JSON-RPC request that satisfies the given predicate in message trace
+    /// or waits for a new one.
+    pub fn wait_for_rpc_request(&mut self, predicate: impl Fn(&Request) -> bool) {
+        self.rt.block_on(async {
+            self.output
+                .wait_for_message(|message| {
+                    let Message::Request(req) = message else { return false };
+                    predicate(req)
+                })
+                .await
+                .unwrap_or_else(|err| panic!("waiting for request failed: {err:?}"))
+        })
+    }
 }
 
 /// Quality of life helpers for interacting with the server.
@@ -233,10 +264,44 @@ impl MockClient {
             },
         )
     }
+
+    /// Waits for `textDocument/publishDiagnostics` notification for the given file.
+    pub fn wait_for_diagnostics(&mut self, path: impl AsRef<Path>) {
+        let uri = self.fixture.file_url(&path);
+        self.wait_for_notification::<lsp_notification!("textDocument/publishDiagnostics")>(
+            |params| params.uri == uri,
+        )
+    }
+
+    /// Sends `textDocument/didOpen` notification to the server and then waits for matching
+    /// `textDocument/publishDiagnostics` notification.
+    pub fn open_and_wait_for_diagnostics(&mut self, path: impl AsRef<Path>) {
+        let path = path.as_ref();
+        self.open(path);
+        self.wait_for_diagnostics(path);
+    }
 }
 
-/// A wrapper over message receiver that keeps a trace of all received messages and times out
-/// long-running requests.
+impl AsRef<Fixture> for MockClient {
+    fn as_ref(&self) -> &Fixture {
+        &self.fixture
+    }
+}
+
+#[derive(Debug)]
+enum RecvError {
+    Timeout,
+    NoMessage,
+}
+
+impl From<tokio::time::error::Elapsed> for RecvError {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
+        RecvError::Timeout
+    }
+}
+
+/// A wrapper over message receiver that keeps a trace of all received messages and timeouts
+/// hanging requests.
 struct ServerOutput {
     output_rx: mpsc::Receiver<Message>,
     trace: Vec<Message>,
@@ -249,13 +314,30 @@ impl ServerOutput {
     }
 
     /// Receives a message from the server.
-    async fn recv(&mut self) -> Result<Option<Message>, Elapsed> {
+    async fn recv(&mut self) -> Result<Option<Message>, RecvError> {
         const TIMEOUT: Duration = Duration::from_secs(2 * 60);
+        Ok(timeout(TIMEOUT, self.output_rx.next())
+            .await?
+            .inspect(|msg| self.trace.push(msg.clone())))
+    }
 
-        let r = timeout(TIMEOUT, self.output_rx.next()).await;
-        if let Ok(Some(msg)) = &r {
-            self.trace.push(msg.clone());
+    /// Looks for a message that satisfies the given predicate in message trace or waits for a new
+    /// one.
+    async fn wait_for_message(
+        &mut self,
+        predicate: impl Fn(&Message) -> bool,
+    ) -> Result<(), RecvError> {
+        for message in &self.trace {
+            if predicate(message) {
+                return Ok(());
+            }
         }
-        r
+
+        loop {
+            let message = self.recv().await?.ok_or(RecvError::NoMessage)?;
+            if predicate(&message) {
+                return Ok(());
+            }
+        }
     }
 }

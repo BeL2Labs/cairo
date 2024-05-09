@@ -2,6 +2,7 @@ pub mod client_capabilities;
 pub mod fixture;
 mod jsonrpc;
 pub mod mock_client;
+pub mod normalize;
 mod runtime;
 
 /// Create a sandboxed environment for testing language server features.

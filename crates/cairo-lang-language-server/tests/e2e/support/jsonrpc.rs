@@ -15,7 +15,11 @@ pub enum Message {
 impl Message {
     /// Creates a JSON-RPC request message from untyped parts.
     pub fn request(method: &'static str, id: Id, params: Value) -> Message {
-        Message::Request(Request::build(method).id(id).params(params).finish())
+        let mut b = Request::build(method).id(id);
+        if !params.is_null() {
+            b = b.params(params);
+        }
+        Message::Request(b.finish())
     }
 
     /// Creates a JSON-RPC notification message from untyped parts.
