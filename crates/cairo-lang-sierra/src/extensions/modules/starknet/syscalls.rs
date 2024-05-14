@@ -1,7 +1,7 @@
 use itertools::chain;
 
 use super::interoperability::ClassHashType;
-use super::u64_span_ty;
+use super::{u64_span_ty, u8_span_ty};
 use crate::extensions::array::ArrayType;
 use crate::extensions::felt252::Felt252Type;
 use crate::extensions::gas::GasBuiltinType;
@@ -146,6 +146,50 @@ impl SyscallGenericLibfunc for KeccakLibfunc {
         Ok(vec![
             // input
             u64_span_ty(context)?,
+        ])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![get_u256_type(context)?])
+    }
+}
+
+/// Libfunc for the sha256 system call.
+#[derive(Default)]
+pub struct Sha256Libfunc {}
+impl SyscallGenericLibfunc for Sha256Libfunc {
+    const STR_ID: &'static str = "sha256_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![
+            // input
+            u8_span_ty(context)?,
+        ])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![get_u256_type(context)?])
+    }
+}
+
+/// Libfunc for the sha2d system call.
+#[derive(Default)]
+pub struct Sha2dLibfunc {}
+impl SyscallGenericLibfunc for Sha2dLibfunc {
+    const STR_ID: &'static str = "sha2d_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![
+            // input
+            u8_span_ty(context)?,
         ])
     }
 

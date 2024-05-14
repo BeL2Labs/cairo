@@ -97,3 +97,13 @@ pub extern fn replace_class_syscall(
 pub extern fn keccak_syscall(
     input: Span<u64>
 ) -> SyscallResult<u256> implicits(GasBuiltin, System) nopanic;
+
+// Computes the sha256 of the input.
+pub extern fn sha256_syscall(
+    input: Span<u8>
+) -> SyscallResult<u256> implicits(GasBuiltin, System) nopanic;
+
+// Computes the sha2d of the input.
+pub extern fn sha2d_syscall(
+    input: Span<u8>
+) -> SyscallResult<u256> implicits(GasBuiltin, System) nopanic;

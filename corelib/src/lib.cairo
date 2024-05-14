@@ -311,6 +311,7 @@ pub mod serde;
 
 // Hash functions.
 pub mod hash;
+use hash::{sha256, sha2d};
 
 pub mod keccak;
 
