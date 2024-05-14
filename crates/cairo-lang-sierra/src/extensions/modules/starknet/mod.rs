@@ -1,4 +1,6 @@
+use crate::extensions::int::unsigned::Uint8Type;
 use crate::extensions::lib_func::SignatureSpecializationContext;
+use crate::extensions::starknet::syscalls::{Sha256Libfunc, Sha2dLibfunc};
 use crate::extensions::{NamedType, SpecializationError};
 use crate::ids::{ConcreteTypeId, UserTypeId};
 use crate::program::GenericArg;
@@ -81,6 +83,8 @@ define_libfunc_hierarchy! {
          GetExecutionInfoV2(GetterLibfunc<GetExecutionInfoV2Trait>),
          Deploy(DeployLibfunc),
          Keccak(KeccakLibfunc),
+         Sha256(Sha256Libfunc),
+         Sha2d(Sha2dLibfunc),
          LibraryCall(LibraryCallLibfunc),
          ReplaceClass(ReplaceClassLibfunc),
          SendMessageToL1(SendMessageToL1Libfunc),
@@ -121,4 +125,11 @@ fn u64_span_ty(
     context: &dyn SignatureSpecializationContext,
 ) -> Result<ConcreteTypeId, SpecializationError> {
     span_ty(context, context.get_concrete_type(Uint64Type::id(), &[])?, "core::integer::u64")
+}
+
+/// User type for `Span<u8>`.
+fn u8_span_ty(
+    context: &dyn SignatureSpecializationContext,
+) -> Result<ConcreteTypeId, SpecializationError> {
+    span_ty(context, context.get_concrete_type(Uint8Type::id(), &[])?, "core::integer::u8")
 }

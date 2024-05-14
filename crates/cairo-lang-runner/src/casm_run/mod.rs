@@ -36,6 +36,7 @@ use itertools::Itertools;
 use num_bigint::{BigInt, BigUint};
 use num_integer::{ExtendedGcd, Integer};
 use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
+use sha2::{Digest, Sha256};
 use {ark_secp256k1 as secp256k1, ark_secp256r1 as secp256r1};
 
 use self::contract_address::calculate_contract_address;
@@ -347,6 +348,8 @@ mod gas_costs {
     pub const GET_EXECUTION_INFO: usize = 10 * STEP;
     pub const KECCAK: usize = 0;
     pub const KECCAK_ROUND_COST: usize = 180000;
+    pub const SHA256: usize = 0;
+    pub const SHA2D: usize = 0;
     pub const LIBRARY_CALL: usize = CALL_CONTRACT;
     pub const REPLACE_CLASS: usize = 50 * STEP;
     pub const SECP256K1_ADD: usize = 254 * STEP + 29 * RANGE_CHECK;
@@ -685,6 +688,12 @@ impl<'a> CairoHintProcessor<'a> {
             }),
             "Keccak" => execute_handle_helper(&mut |system_buffer, gas_counter| {
                 keccak(gas_counter, system_buffer.next_arr()?)
+            }),
+            "Sha256" => execute_handle_helper(&mut |system_buffer, gas_counter| {
+                sha256(gas_counter, system_buffer.next_arr()?)
+            }),
+            "Sha2d" => execute_handle_helper(&mut |system_buffer, gas_counter| {
+                sha2d(gas_counter, system_buffer.next_arr()?)
             }),
             "Secp256k1New" => execute_handle_helper(&mut |system_buffer, gas_counter| {
                 secp256k1_new(
@@ -1252,6 +1261,40 @@ fn keccak(gas_counter: &mut usize, data: Vec<Felt252>) -> Result<SyscallResult, 
         ((Felt252::from(state[1]) << 64u32) + Felt252::from(state[0])).into(),
         ((Felt252::from(state[3]) << 64u32) + Felt252::from(state[2])).into(),
     ]))
+}
+
+/// Executes the `sha256_syscall` syscall.
+fn sha256(gas_counter: &mut usize, data: Vec<Felt252>) -> Result<SyscallResult, HintError> {
+    deduct_gas!(gas_counter, SHA256);
+
+    let mut input: Vec<u8> = vec![];
+    for i in 0..data.len() {
+        input.append(&mut data[i].to_bytes_be())
+    }
+    let h = Sha256::digest(input).to_vec();
+
+    let (a, b) = h.split_at(16);
+    let a = u128::from_be_bytes(a.try_into().unwrap());
+    let b = u128::from_be_bytes(b.try_into().unwrap());
+
+    Ok(SyscallResult::Success(vec![Felt252::from(b).into(), Felt252::from(a).into()]))
+}
+
+/// Executes the `sha2d_syscall` syscall.
+fn sha2d(gas_counter: &mut usize, data: Vec<Felt252>) -> Result<SyscallResult, HintError> {
+    deduct_gas!(gas_counter, SHA2D);
+
+    let mut input: Vec<u8> = vec![];
+    for i in 0..data.len() {
+        input.append(&mut data[i].to_bytes_be())
+    }
+    let h2 = Sha256::digest(Sha256::digest(input).to_vec()).to_vec();
+
+    let (a, b) = h2.split_at(16);
+    let a = u128::from_be_bytes(a.try_into().unwrap());
+    let b = u128::from_be_bytes(b.try_into().unwrap());
+
+    Ok(SyscallResult::Success(vec![Felt252::from(b).into(), Felt252::from(a).into()]))
 }
 
 // --- secp256k1 ---

@@ -148,3 +148,16 @@ impl TupleSize4Hash<
         state.update_with(e0).update_with(e1).update_with(e2).update_with(e3)
     }
 }
+
+use core::starknet::SyscallResultTrait;
+
+
+// Returns the sha256 hash as big endian u256.
+pub fn sha256(input: Span<u8>) -> u256 {
+    starknet::syscalls::sha256_syscall(input).unwrap_syscall()
+}
+
+// Returns the sha2d hash as big endian u256.
+pub fn sha2d(input: Span<u8>) -> u256 {
+    starknet::syscalls::sha2d_syscall(input).unwrap_syscall()
+}

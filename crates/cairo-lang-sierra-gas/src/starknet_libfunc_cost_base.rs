@@ -69,6 +69,8 @@ pub fn starknet_libfunc_cost_base(libfunc: &StarkNetConcreteLibfunc) -> Vec<Cons
                 },
             }
         }
+        StarkNetConcreteLibfunc::Sha256(_) => syscall_cost(1),
+        StarkNetConcreteLibfunc::Sha2d(_) => syscall_cost(1),
     }
 }
 

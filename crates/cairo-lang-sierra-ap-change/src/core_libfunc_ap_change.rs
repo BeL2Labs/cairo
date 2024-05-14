@@ -320,6 +320,8 @@ pub fn core_libfunc_ap_change<InfoProvider: InvocationApChangeInfoProvider>(
             StarkNetConcreteLibfunc::Testing(libfunc) => match libfunc {
                 TestingConcreteLibfunc::Cheatcode(_) => vec![ApChange::Known(2)],
             },
+            StarkNetConcreteLibfunc::Sha256(_) => vec![ApChange::Known(2), ApChange::Known(2)],
+            StarkNetConcreteLibfunc::Sha2d(_) => vec![ApChange::Known(2), ApChange::Known(2)],
         },
         Nullable(libfunc) => match libfunc {
             NullableConcreteLibfunc::Null(_)

@@ -78,6 +78,8 @@ pub fn build(
         }
         StarkNetConcreteLibfunc::Testing(libfunc) => testing::build(libfunc, builder),
         StarkNetConcreteLibfunc::Secp256(libfunc) => secp256::build(libfunc, builder),
+        StarkNetConcreteLibfunc::Sha256(_) => build_syscalls(builder, "Sha256", [2], [2]),
+        StarkNetConcreteLibfunc::Sha2d(_) => build_syscalls(builder, "Sha2d", [2], [2]),
     }
 }
 
